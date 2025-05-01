@@ -200,6 +200,11 @@ def get_languages(langs):
     return res
 
 
-cleanup_settings(os.path.join('resources', 'settings.xml'))
-load_providers(os.path.join('burst', 'providers', 'providers.json'))
-store_providers(os.path.join('resources', 'settings.xml'))
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Traverse up to the root directory
+root_dir = os.path.abspath(os.path.join(base_dir, '..'))
+
+cleanup_settings(os.path.join(root_dir, 'resources', 'settings.xml'))
+load_providers(os.path.join(root_dir, 'burst', 'providers', 'providers.json'))
+store_providers(os.path.join(root_dir, 'resources', 'settings.xml'))

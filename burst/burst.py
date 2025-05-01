@@ -259,6 +259,34 @@ def got_results(provider, results):
     if definition['name'] in provider_names:
         provider_names.remove(definition['name'])
 
+def extract_torrents_via_proxy(provider, client, query):
+    api_url = "http://192.168.2.6:7070/search?query=%s" % query
+
+    username = get_setting('%s_username' % provider, unicode)
+    password = get_setting('%s_password' % provider, unicode)
+
+    response = requests.post(api_url, headers={"Accept": "application/json"}, json={
+        "username": username,
+        "password": password
+    })
+
+    if response.status_code == 200:
+        torrents = response.json()
+
+        for item in torrents:
+            name = item.get("name", "")
+            torrent_id = item.get("torrentId", "")
+            size = item.get("size", "")
+            seeds = item.get("seeds", "")
+            peers = item.get("peers", "")
+
+            log.debug(f"{name} | {size} | Seeds: {seeds} | Peers: {peers}")
+
+            ret = (name, "", "http://192.168.2.6:7070/fetch?torrentId=%s" % torrent_id, size, seeds, peers)
+            yield ret
+
+    else:
+        log.debug(f"Error {response.status_code}: {response.text}")
 
 def extract_torrents(provider, client):
     """ Main torrent extraction generator for non-API based providers
@@ -703,9 +731,17 @@ def run_provider(provider, payload, method, start_time, timeout):
         filterInstance.use_general(provider, payload)
 
     if 'is_api' in definitions[provider]:
-        results = process(provider=provider, generator=extract_from_api, filtering=filterInstance, has_special=payload['has_special'], skip_auth=payload['skip_auth'], start_time=start_time, timeout=timeout, is_silent=payload['silent'])
+        results = process(provider=provider, generator=extract_from_api, filtering=filterInstance,
+                          has_special=payload['has_special'], skip_auth=payload['skip_auth'], start_time=start_time,
+                          timeout=timeout, is_silent=payload['silent'])
+    elif 'is_proxy' in definitions[provider]:
+        results = process(provider=provider, generator=extract_torrents_via_proxy, filtering=filterInstance,
+                          has_special=payload['has_special'], skip_auth=payload['skip_auth'], start_time=start_time,
+                          timeout=timeout, is_silent=payload['silent'])
     else:
-        results = process(provider=provider, generator=extract_torrents, filtering=filterInstance, has_special=payload['has_special'], skip_auth=payload['skip_auth'], start_time=start_time, timeout=timeout, is_silent=payload['silent'])
+        results = process(provider=provider, generator=extract_torrents, filtering=filterInstance,
+                          has_special=payload['has_special'], skip_auth=payload['skip_auth'], start_time=start_time,
+                          timeout=timeout, is_silent=payload['silent'])
 
     # Cleanup results from duplcates before limiting each provider's results.
     results = cleanup_results(results)

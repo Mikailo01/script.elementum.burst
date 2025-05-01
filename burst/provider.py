@@ -344,7 +344,7 @@ def process(provider, generator, filtering, has_special, verify_name=True, verif
         try:
             filtering.results.extend(
                 generate_payload(provider,
-                                generator(provider, client),
+                                generator(provider, client, query),
                                 filtering,
                                 verify_name,
                                 verify_size))
