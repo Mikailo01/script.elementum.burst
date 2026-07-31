@@ -147,8 +147,8 @@ msgid "Shows"
 msgstr "Сериалы"
 
 msgctxt "#32084"
-msgid "Use Public DNS (Google, Quad9, Opennic)"
-msgstr "Использовать публичные DNS (Google, Quad9, Opennic)"
+msgid "Use Public DNS (Google, Quad9, OpenNIC)"
+msgstr "Использовать публичные DNS (Google, Quad9, OpenNIC)"
 
 msgctxt "#32085"
 msgid "For Developers"
@@ -187,8 +187,8 @@ msgid "List of public DNS IPs"
 msgstr "Список IP публичных DNS"
 
 msgctxt "#32094"
-msgid "List of Opennic DNS IPs"
-msgstr "Список IP Opennic DNS"
+msgid "List of OpenNIC DNS IPs"
+msgstr "Список IP OpenNIC DNS"
 
 msgctxt "#32095"
 msgid "Proxy"
@@ -245,6 +245,10 @@ msgstr "Из настроек Elementum"
 msgctxt "#32108"
 msgid "Custom settings"
 msgstr "Пользовательские настройки"
+
+msgctxt "#32109"
+msgid "Antizapret proxy (only for Russia)"
+msgstr "Antizapret прокси (только для РФ)"
 
 msgctxt "#32110"
 msgid "International"
@@ -485,3 +489,11 @@ msgstr "[B]Синхронизация cookie не смогла авторизо�
 msgctxt "#32169"
 msgid "Login to {0} failed"
 msgstr "Вход в {0} не удался"
+
+msgctxt "#32170"
+msgid "Antizapret PAC file URL"
+msgstr "URL файла PAC Antizapret"
+
+msgctxt "#32171"
+msgid "Use OpenNIC DNS servers"
+msgstr "Использовать OpenNIC DNS сервера"

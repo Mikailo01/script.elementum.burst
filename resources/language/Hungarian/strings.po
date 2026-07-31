@@ -146,7 +146,7 @@ msgid "Shows"
 msgstr ""
 
 msgctxt "#32084"
-msgid "Use Public DNS (Google, Quad9, Opennic)"
+msgid "Use Public DNS (Google, Quad9, OpenNIC)"
 msgstr ""
 
 msgctxt "#32085"
@@ -186,7 +186,7 @@ msgid "List of public DNS IPs"
 msgstr ""
 
 msgctxt "#32094"
-msgid "List of Opennic DNS IPs"
+msgid "List of OpenNIC DNS IPs"
 msgstr ""
 
 msgctxt "#32095"
@@ -243,6 +243,10 @@ msgstr ""
 
 msgctxt "#32108"
 msgid "Custom settings"
+msgstr ""
+
+msgctxt "#32109"
+msgid "Antizapret proxy (only for Russia)"
 msgstr ""
 
 msgctxt "#32110"
@@ -483,4 +487,12 @@ msgstr ""
 
 msgctxt "#32169"
 msgid "Login to {0} failed"
+msgstr ""
+
+msgctxt "#32170"
+msgid "Antizapret PAC file URL"
+msgstr ""
+
+msgctxt "#32171"
+msgid "Use OpenNIC DNS servers"
 msgstr ""

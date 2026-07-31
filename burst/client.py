@@ -9,13 +9,18 @@ from future.utils import PY3, iteritems
 import re
 import os
 import urllib3
-import dns.resolver
 import requests
+import antizapret
+try:
+    import dns.resolver
+    platform_can_resolve = True
+except:
+    platform_can_resolve = False
 
 from elementum.provider import log, get_setting
 from time import sleep
 from urllib3.util import connection
-from .utils import encode_dict, translatePath
+from .utils import encode_dict, translatePath, is_ipv4_address
 if PY3:
     from http.cookiejar import LWPCookieJar
     from urllib.parse import urlparse, urlencode
@@ -24,13 +29,13 @@ else:
     from cookielib import LWPCookieJar
     from urllib import urlencode
     from urlparse import urlparse
-from kodi_six import xbmcaddon
+from kodi_six import xbmcaddon, py2_encode
 
 from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from requests.cookies import create_cookie
 
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 if os.name == 'nt':
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 
@@ -43,9 +48,11 @@ if get_setting("use_custom_user_agent", bool):
 PATH_TEMP = translatePath("special://temp")
 
 # Custom DNS default data
+OPENNIC_API_URL = 'https://api.opennicproject.org/geoip/?bare&res=3&adm=3&rnd=true&ipv=4'
+OPENNIC_DNS_FALLBACK = ['94.247.43.254', '152.53.15.127', '95.216.99.249']
 dns_cache = {}
 dns_public_list = ['9.9.9.9', '8.8.8.8', '8.8.4.4']
-dns_opennic_list = ['54.36.111.116', '192.3.165.37', '80.78.132.79']
+dns_opennic_list = list(OPENNIC_DNS_FALLBACK)
 # Save original DNS resolver
 _orig_create_connection = connection.create_connection
 
@@ -63,8 +70,6 @@ elementum_proxy_types_overrides = {'socks4': 'socks4a',
 urllib3.disable_warnings()
 
 # Kodi settings
-public_dns_list = get_setting("public_dns_list", unicode)
-opennic_dns_list = get_setting("opennic_dns_list", unicode)
 proxy_enabled = get_setting("proxy_enabled", bool)
 proxy_use_type = get_setting("proxy_use_type", int)
 proxy_host = get_setting("proxy_host", unicode)
@@ -72,9 +77,37 @@ proxy_port = get_setting("proxy_port", int)
 proxy_login = get_setting("proxy_login", unicode)
 proxy_password = get_setting("proxy_password", unicode)
 proxy_type = get_setting("proxy_type", int)
-use_public_dns = get_setting("use_public_dns", bool)
+use_custom_dns = get_setting("use_custom_dns", bool)
+public_dns_list = get_setting("public_dns_list", unicode)
+use_opennic_dns = get_setting("use_opennic_dns", bool)
 use_tor_dns = get_setting("use_tor_dns", bool)
 use_elementum_proxy = get_setting("use_elementum_proxy", bool)
+
+def FetchOpenNICDnsServers():
+    try:
+        response = requests.get(OPENNIC_API_URL, timeout=5, headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        dns_servers = []
+        for line in response.text.splitlines():
+            candidate = line.strip()
+            if not candidate or not is_ipv4_address(candidate):
+                continue
+            if candidate in dns_servers:
+                continue
+            dns_servers.append(candidate)
+
+        if dns_servers:
+            log.debug("Loaded %d OpenNIC DNS servers from API" % len(dns_servers))
+            return dns_servers
+        log.debug("OpenNIC API returned no valid IPv4 DNS servers, using fallback list")
+    except Exception as e:
+        log.debug("Failed to fetch OpenNIC DNS servers from API: %s" % repr(e))
+    return list(OPENNIC_DNS_FALLBACK)
+
+
+if use_opennic_dns:
+    dns_opennic_list = FetchOpenNICDnsServers()
+
 
 def MyResolver(host):
     if '.' not in host:
@@ -86,7 +119,7 @@ def MyResolver(host):
         pass
 
     ip = ResolvePublic(host)
-    if not ip:
+    if not ip and use_opennic_dns:
         ip = ResolveOpennic(host)
 
     if ip:
@@ -108,13 +141,14 @@ def ResolvePublic(host):
 
 def ResolveOpennic(host):
     try:
-        log.debug("Custom DNS resolving with public DNS for: %s" % host)
+        log.debug("Custom DNS resolving with OpenNIC DNS for: %s" % host)
         resolver = dns.resolver.Resolver()
         resolver.nameservers = dns_opennic_list
         answer = resolver.query(host, 'A')
         return answer.rrset.items[0].address
     except:
         return
+
 
 class Client:
     """
@@ -135,12 +169,13 @@ class Client:
         self.passkey = None
         self.info = info
         self.proxy_url = None
+        self.use_antizapret = False
+        self.antizapret_proxy = None
         self.request_charset = request_charset
         self.response_charset = response_charset
         self.is_api = is_api
 
         self.use_cookie_sync = False
-        self.needs_proxylock = False
 
         self.headers = dict()
         self.request_headers = None
@@ -165,9 +200,7 @@ class Client:
         # self.session = self.scraper.session()
 
         global dns_public_list
-        global dns_opennic_list
         dns_public_list = public_dns_list.replace(" ", "").split(",")
-        dns_opennic_list = opennic_dns_list.replace(" ", "").split(",")
         # socket.setdefaulttimeout(60)
 
         # Parsing proxy information
@@ -186,7 +219,7 @@ class Client:
         except:
             pass
 
-        if use_public_dns:
+        if use_custom_dns and platform_can_resolve:
             connection.create_connection = patched_create_connection
 
         if use_elementum_proxy:
@@ -207,7 +240,7 @@ class Client:
                     self.proxy_url = "{0}://{1}:{2}@{3}:{4}".format(proxy['type'], proxy['login'], proxy['password'], proxy['host'], proxy['port'])
                 else:
                     self.proxy_url = "{0}://{1}:{2}".format(proxy['type'], proxy['host'], proxy['port'])
-            if proxy['use_type'] == 2 and info and "proxy_url" in info:
+            elif proxy['use_type'] == 2 and info and "proxy_url" in info:
                 log.debug("Setting proxy with hosts resolve from Elementum: %s" % (info["proxy_url"]))
 
                 proxy_url_scheme_separator = '://'
@@ -215,6 +248,12 @@ class Client:
                 elementum_proxy_url_prefix = elementum_proxy_url_parts[0].lower()
                 if elementum_proxy_url_prefix in elementum_proxy_types_overrides:
                     self.proxy_url = proxy_url_scheme_separator.join([elementum_proxy_types_overrides[elementum_proxy_url_prefix]] + elementum_proxy_url_parts[1:])
+            elif proxy['use_type'] == 3:
+                log.debug("Setting proxy to Antizapret proxy")
+
+                self.use_antizapret = True
+                self.proxy_url = None
+                self.antizapret_proxy = antizapret.AntizapretProxy()
         if self.proxy_url:
             self.session.proxies = {
                 'http': self.proxy_url,
@@ -285,6 +324,16 @@ class Client:
 
         if get_data:
             url += '?' + urlencode(get_data)
+
+        if self.use_antizapret:
+            parsed = urlparse(url)
+            proxy = self.antizapret_proxy.detect(host=parsed.netloc)
+            if proxy:
+                log.debug("Detected Antizapret proxy for %s: %s" % (parsed.netloc, proxy))
+                self.session.proxies = {
+                    'http': proxy,
+                    'https': proxy,
+                }
 
         log.debug("Opening URL: %s" % repr(url))
         if self.session.proxies:
@@ -363,6 +412,8 @@ class Client:
             map(log.debug, traceback.format_exc().split("\n"))
 
         log.debug("Status for %s : %s" % (repr(url), str(self.status)))
+        if self.status != 200:
+            log.debug("Failed response content for %s : %s" % (repr(url), str(self.content)))
 
         return self.status == 200
 
@@ -384,9 +435,9 @@ class Client:
             if not prerequest.startswith('http'):
                 prerequest = root_url + prerequest
             log.debug("Running prerequest to %s" % (prerequest))
-            self.open(prerequest.encode('utf-8'), headers=headers)
+            self.open(py2_encode(prerequest), headers=headers)
 
-        if self.open(url.encode('utf-8'), post_data=encode_dict(data, self.request_charset), headers=headers):
+        if self.open(py2_encode(url), post_data=encode_dict(data, self.request_charset), headers=headers):
             try:
                 if fails_with and re.search(fails_with, self.content):
                     self.status = 'Wrong username or password'
@@ -413,3 +464,7 @@ def patched_create_connection(address, *args, **kwargs):
     hostname = MyResolver(host)
 
     return _orig_create_connection((hostname, port), *args, **kwargs)
+
+def change_agent(userAgent):
+    global USER_AGENT
+    USER_AGENT = userAgent
